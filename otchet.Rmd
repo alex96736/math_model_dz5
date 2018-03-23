@@ -1,0 +1,247 @@
+---
+title: "Мат. моделирование. Упражнение №5"
+author: "Розумнюк А.А."
+date: '23 марта 2018 г '
+output: html_document
+---
+### Практика 5
+
+```{r}
+library("ISLR") 
+library('GGally')       # графики совместного разброса переменных
+library('lmtest')       # тесты остатков регрессионных моделей
+library('FNN') 
+library('boot') 
+
+data(Auto)
+
+# константы
+my.seed <- 1
+train.percent <- 0.85
+str(Auto)
+
+Auto <- Auto[, c(1:5)]   #исключаем переменные, которые не участвуют в рассчетах
+str(Auto)
+
+# графики разброса
+ggpairs(Auto[])
+
+# только mpg ~ weight
+plot(Auto$weight, Auto$mpg,
+     xlab = 'weight', ylab = 'mpg', pch = 21,
+     col = rgb(0, 0, 1, alpha = 0.4), bg = rgb(0, 0, 1, alpha = 0.4))
+
+# только mpg ~ displacement
+plot(Auto$displacement, Auto$mpg,
+     xlab = 'displacement', ylab = 'mpg', pch = 21,
+     col = rgb(0, 0, 1, alpha = 0.4), bg = rgb(0, 0, 1, alpha = 0.4))
+
+# только mpg ~ horsepower
+plot(Auto$horsepower, Auto$mpg,
+     xlab = 'horsepower', ylab = 'mpg', pch = 21,
+     col = rgb(0, 0, 1, alpha = 0.4), bg = rgb(0, 0, 1, alpha = 0.4))
+
+
+
+# общее число наблюдений
+n <- nrow(Auto)
+
+# доля обучающей выборки
+train.percent <- 0.5
+
+# выбрать наблюдения в обучающую выборку
+set.seed(my.seed)
+inTrain <- sample(n, n * train.percent)
+
+```
+
+Построим модели для проверки точности
+
+```{r}
+# присоединить таблицу с данными: названия стоблцов будут доступны напрямую
+attach(Auto)
+# подгонка линейной модели на обучающей выборке
+fit.lm.1 <- lm(mpg ~ weight + displacement + horsepower + cylinders, 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.1,
+                              Auto[-inTrain, ]))^2)
+
+fit.lm.1n <- lm(mpg ~ displacement + weight + horsepower, 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.1n,
+                              Auto[-inTrain, ]))^2)
+
+# отсоединить таблицу с данными
+detach(Auto)
+
+# присоединить таблицу с данными: названия стоблцов будут доступны напрямую
+attach(Auto)
+# подгонка линейной модели на обучающей выборке
+fit.lm.2 <- lm(mpg ~ poly(weight, 2) + poly(cylinders, 2) + poly(displacement, 2) + poly(horsepower, 2), 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.2,
+                              Auto[-inTrain, ]))^2)
+
+# подгонка линейной модели на обучающей выборке
+fit.lm.2n <- lm(mpg ~ poly(weight, 2) + poly(displacement, 2) + poly(horsepower, 2), 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.2n,
+                              Auto[-inTrain, ]))^2)
+
+# присоединить таблицу с данными: названия стоблцов будут доступны напрямую
+attach(Auto)
+# подгонка линейной модели на обучающей выборке
+fit.lm.3 <- lm(mpg ~ poly(weight, 3) + poly(cylinders, 3) + poly(displacement, 3) + poly(horsepower, 3), 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.3,
+                              Auto[-inTrain, ]))^2)
+
+fit.lm.3n <- lm(mpg ~ poly(weight, 3) + poly(displacement, 3) + poly(horsepower, 3), 
+               subset = inTrain)
+# считаем MSE на тестовой выборке
+mean((mpg[-inTrain] - predict(fit.lm.3n,
+                              Auto[-inTrain, ]))^2)
+
+# отсоединить таблицу с данными
+detach(Auto)
+# подгонка линейной модели на обучающей выборке
+fit.glm <- glm(mpg ~ weight + displacement + horsepower + cylinders, data = Auto)
+# считаем LOOCV-ошибку
+cv.err <- cv.glm(Auto, fit.glm)
+# результат: первое число -- по формуле LOOCV-ошибки,
+#  второе -- с поправкой на смещение
+cv.err$delta[1]
+
+# подгонка линейной модели на обучающей выборке
+fit.glmn <- glm(mpg ~ weight + displacement + horsepower, data = Auto)
+# считаем LOOCV-ошибку
+cv.err <- cv.glm(Auto, fit.glmn)
+# результат: первое число -- по формуле LOOCV-ошибки,
+#  второе -- с поправкой на смещение
+cv.err$delta[1]
+
+
+# вектор с LOOCV-ошибками
+cv.err.loocv <- rep(0, 4)
+names(cv.err.loocv) <- 1:4
+# цикл по степеням полиномов
+for (i in 1:4){
+  fit.glm <- glm(mpg ~ poly(weight, i) + poly(cylinders, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.loocv[i] <- cv.glm(Auto, fit.glm)$delta[1]
+}
+# результат
+cv.err.loocv
+
+# вектор с LOOCV-ошибками
+cv.err.loocvn <- rep(0, 4)
+names(cv.err.loocvn) <- 1:4
+# цикл по степеням полиномов
+for (i in 1:4){
+  fit.glmn <- glm(mpg ~ poly(weight, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.loocvn[i] <- cv.glm(Auto, fit.glmn)$delta[1]
+}
+# результат
+cv.err.loocvn
+
+# оценим точность полиномиальных моделей, меняя степень
+# вектор с ошибками по 10-кратной кросс-валидации
+cv.err.k.fold <- rep(0, 4)
+names(cv.err.k.fold) <- 1:4
+# цикл по степеням полиномов
+for (i in 1:4){
+  fit.glm <- glm(mpg ~ poly(weight, i) + poly(cylinders, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.k.fold[i] <- cv.glm(Auto, fit.glm,
+                             K = 10)$delta[1]
+}
+# результат
+cv.err.k.fold
+
+# оценим точность полиномиальных моделей, меняя степень
+# вектор с ошибками по 10-кратной кросс-валидации
+cv.err.k.fold <- rep(0, 4)
+names(cv.err.k.fold) <- 1:4
+# цикл по степеням полиномов
+for (i in 1:4){
+  fit.glmn <- glm(mpg ~ poly(weight, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.k.fold[i] <- cv.glm(Auto, fit.glmn,
+                             K = 10)$delta[1]
+}
+# результат
+cv.err.k.fold
+
+
+# оценим точность полиномиальных моделей, меняя степень
+# вектор с ошибками по 5-кратной кросс-валидации
+cv.err.k.fold5 <- rep(0, 4)
+names(cv.err.k.fold5) <- 1:4
+# цикл по степеням полиномов
+for (i in 1:4){
+  fit.glm <- glm(mpg ~ poly(weight, i) + poly(cylinders, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.k.fold5[i] <- cv.glm(Auto, fit.glm,
+                             K = 5)$delta[1]
+}
+# результат
+cv.err.k.fold5
+
+for (i in 1:4){
+  fit.glmn <- glm(mpg ~ poly(weight, i) + poly(displacement, i) + poly(horsepower, i), data = Auto)
+  cv.err.k.fold5[i] <- cv.glm(Auto, fit.glmn,
+                              K = 5)$delta[1]
+}
+# результат
+cv.err.k.fold5
+
+```
+
+Наилучшей моделью является кубическая модель с дискретной переменной. Не все методы указывают на одну модель, 5-кратная кросс-валидация указывают на то, что лучшей моделью является квадратичная.
+
+```{r}
+# Оценивание точности линейной регрессионной модели ----------------------------
+
+# оценить стандартные ошибки параметров модели 
+#  сравнить с оценками ошибок по МНК
+
+# функция для расчёта коэффициентов ПЛР по выборке из данных
+boot.fn <- function(data, index){
+  coef(lm(mpg ~ weight + displacement + horsepower + cylinders, data = data, subset = index))
+}
+boot.fn(Auto, 1:n)
+
+# пример применения функции к бутстреп-выборке
+set.seed(my.seed)
+boot.fn(Auto, sample(n, n, replace = T))
+# применяем функцию boot для вычисления стандартных ошибок параметров
+#  (1000 выборок с повторами)
+boot(Auto, boot.fn, 1000)
+# сравним с МНК
+attach(Auto)
+summary(lm(mpg ~ weight + displacement + horsepower + cylinders))$coef
+detach(Auto)
+
+# функция для расчёта коэффициентов ПЛР по выборке из данных
+boot.fn1 <- function(data, index){
+  coef(lm(mpg ~ weight + displacement + horsepower, data = data, subset = index))
+}
+boot.fn1(Auto, 1:n)
+
+# пример применения функции к бутстреп-выборке
+set.seed(my.seed)
+boot.fn1(Auto, sample(n, n, replace = T))
+# применяем функцию boot для вычисления стандартных ошибок параметров
+#  (1000 выборок с повторами)
+boot(Auto, boot.fn1, 1000)
+# сравним с МНК
+attach(Auto)
+summary(lm(mpg ~ weight + displacement + horsepower))$coef
+detach(Auto)
+
+
+```
+
+Оценки отличаются из-за того, что МНК - параметрический метод с допущениями
+
